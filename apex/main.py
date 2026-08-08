@@ -177,10 +177,9 @@ def debate(
     console.print(f"[bold magenta]⚔️ APEX Adversarial Debate Engine auditing proposal...[/bold magenta]")
     
     async def _run_deb():
-        result = await engine.debate_and_refine(goal, proposal)
-        console.print(f"[bold yellow]Audit Status:[/bold yellow] {result.get('consensus')}")
-        console.print(f"[bold red]Identified Flaws:[/bold red]\n" + "\n".join(result.get("flaws", [])))
-        console.print(f"[bold green]Refined Solution:[/bold green]\n{result.get('refined_solution')}")
+        refined_solution, confidence = await engine.debate_and_refine(goal, proposal)
+        console.print(f"[bold yellow]Audit Confidence:[/bold yellow] {confidence:.2f}")
+        console.print(f"[bold green]Refined Solution:[/bold green]\n{refined_solution}")
 
     asyncio.run(_run_deb())
 
