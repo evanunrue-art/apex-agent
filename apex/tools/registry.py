@@ -4,22 +4,53 @@ from apex.tools.filesystem import FileSystemTool
 from apex.tools.terminal import TerminalEngine
 from apex.tools.git_checkpoint import GitCheckpointManager
 from apex.tools.browser import BrowserTool
+from apex.tools.data_analysis import DataAnalysisTool
+from apex.tools.sysadmin import SysAdminTool
+from apex.tools.research_synthesis import ResearchSynthesisTool
+from apex.tools.document_ingestion import DocumentIngestionTool
 
 class ToolRegistry:
-    """Central registration & dispatcher for all APEX tools."""
+    """Universal Tool Registry for APEX."""
 
     def __init__(self):
         self.fs = FileSystemTool()
         self.term = TerminalEngine()
         self.git = GitCheckpointManager()
         self.browser = BrowserTool()
-        self._custom_skills: Dict[str, Any] = {}
+        self.data_tool = DataAnalysisTool()
+        self.sys_tool = SysAdminTool()
+        self.research_tool = ResearchSynthesisTool()
+        self.doc_tool = DocumentIngestionTool()
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
         return [
+            # Document Ingestion Tools
+            {
+                "name": "parse_document",
+                "description": "Extract text content from PDF, PPTX, DOCX, or text reference files.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string"}
+                    },
+                    "required": ["file_path"]
+                }
+            },
+            {
+                "name": "ingest_document",
+                "description": "Parse and index a PDF, PPTX, or DOCX reference document into the Cognitive Knowledge Graph.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string"}
+                    },
+                    "required": ["file_path"]
+                }
+            },
+            # File & Code Tools
             {
                 "name": "view_file",
-                "description": "View contents of a file with line numbers.",
+                "description": "View contents of any text or code file with line numbers.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -32,7 +63,7 @@ class ToolRegistry:
             },
             {
                 "name": "write_file",
-                "description": "Create or overwrite a file with given content.",
+                "description": "Create or overwrite a file with given text/code/markdown content.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -57,7 +88,7 @@ class ToolRegistry:
             },
             {
                 "name": "run_command",
-                "description": "Execute a shell command in the workspace.",
+                "description": "Execute any shell command, CLI binary, or script.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -69,7 +100,7 @@ class ToolRegistry:
             },
             {
                 "name": "grep_search",
-                "description": "Search code using regex pattern across files.",
+                "description": "Search text files using regex across workspace.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -81,7 +112,7 @@ class ToolRegistry:
             },
             {
                 "name": "list_files",
-                "description": "List files in the workspace.",
+                "description": "List files in the workspace matching a pattern.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -89,28 +120,58 @@ class ToolRegistry:
                     }
                 }
             },
+            # Data & Math Analytics Tools
             {
-                "name": "create_checkpoint",
-                "description": "Create an instant shadow Git checkpoint before high-risk changes.",
+                "name": "analyze_dataset",
+                "description": "Load a CSV/JSON dataset and produce summary statistics.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "label": {"type": "string"}
+                        "csv_or_json_path": {"type": "string"}
                     },
-                    "required": ["label"]
+                    "required": ["csv_or_json_path"]
                 }
             },
             {
-                "name": "rollback_checkpoint",
-                "description": "Rollback workspace to a previous checkpoint SHA or index.",
+                "name": "execute_python_script",
+                "description": "Execute inline python code for data processing, plotting, or stats.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "target": {"type": "string"}
+                        "code_snippet": {"type": "string"}
                     },
-                    "required": ["target"]
+                    "required": ["code_snippet"]
                 }
             },
+            # System Admin & Telemetry Tools
+            {
+                "name": "get_system_metrics",
+                "description": "Retrieve active CPU, Memory, Disk, and system hardware telemetry.",
+                "parameters": {"type": "object", "properties": {}}
+            },
+            {
+                "name": "list_running_processes",
+                "description": "List top active system processes by CPU/Memory.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "top_n": {"type": "integer", "default": 15}
+                    }
+                }
+            },
+            {
+                "name": "check_network_port",
+                "description": "Check if a host and port are open.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "host": {"type": "string", "default": "127.0.0.1"},
+                        "port": {"type": "integer", "default": 80}
+                    },
+                    "required": ["port"]
+                }
+            },
+            # Web & Autonomous Research Tools
             {
                 "name": "fetch_web_page",
                 "description": "Fetch text content from a web URL.",
@@ -121,12 +182,50 @@ class ToolRegistry:
                     },
                     "required": ["url"]
                 }
+            },
+            {
+                "name": "search_and_synthesize",
+                "description": "Run multi-angle autonomous web search synthesis on any research topic.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string"}
+                    },
+                    "required": ["topic"]
+                }
+            },
+            # Checkpoint Tools
+            {
+                "name": "create_checkpoint",
+                "description": "Create a shadow Git checkpoint snapshot.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string"}
+                    },
+                    "required": ["label"]
+                }
+            },
+            {
+                "name": "rollback_checkpoint",
+                "description": "Rollback workspace state to a snapshot SHA or index.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string"}
+                    },
+                    "required": ["target"]
+                }
             }
         ]
 
     async def execute(self, tool_name: str, args: Dict[str, Any]) -> str:
         try:
-            if tool_name == "view_file":
+            if tool_name == "parse_document":
+                return self.doc_tool.parse_document(args.get("file_path", ""))
+            elif tool_name == "ingest_document":
+                return self.doc_tool.ingest_and_index(args.get("file_path", ""))
+            elif tool_name == "view_file":
                 return self.fs.view_file(**args)
             elif tool_name == "write_file":
                 return self.fs.write_file(**args)
@@ -141,14 +240,28 @@ class ToolRegistry:
             elif tool_name == "list_files":
                 res = self.fs.list_files(**args)
                 return json.dumps(res, indent=2)
+            elif tool_name == "analyze_dataset":
+                return self.data_tool.analyze_dataset(**args)
+            elif tool_name == "execute_python_script":
+                return self.data_tool.execute_python_script(**args)
+            elif tool_name == "get_system_metrics":
+                res = self.sys_tool.get_system_metrics()
+                return json.dumps(res, indent=2)
+            elif tool_name == "list_running_processes":
+                res = self.sys_tool.list_running_processes(**args)
+                return json.dumps(res, indent=2)
+            elif tool_name == "check_network_port":
+                return self.sys_tool.check_network_port(**args)
+            elif tool_name == "fetch_web_page":
+                return await self.browser.fetch_web_page(args.get("url", ""))
+            elif tool_name == "search_and_synthesize":
+                return await self.research_tool.search_and_synthesize(args.get("topic", ""))
             elif tool_name == "create_checkpoint":
                 sha = self.git.create_snapshot(args.get("label", "Manual Checkpoint"))
                 return f"Created checkpoint SHA: {sha}"
             elif tool_name == "rollback_checkpoint":
                 ok = self.git.rollback_to_snapshot(args.get("target"))
                 return "Successfully rolled back workspace." if ok else "Failed to rollback workspace."
-            elif tool_name == "fetch_web_page":
-                return await self.browser.fetch_web_page(args.get("url", ""))
             else:
                 return f"Error: Unknown tool '{tool_name}'."
         except Exception as e:

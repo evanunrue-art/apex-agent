@@ -64,3 +64,49 @@ class DebuggerAgent(BaseAgent):
         
         fix = await self.router.generate(messages, system_prompt=system_prompt, task_type="code")
         return {"agent": self.name, "fix_proposal": fix}
+
+
+class ResearcherAgent(BaseAgent):
+    """Specialized Sub-Agent for Deep Literature, Web Research, and Source Synthesis."""
+
+    def __init__(self, config):
+        super().__init__("Researcher", "Executes multi-angle web research and synthesizes comprehensive reports.", config)
+
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        topic = input_data.get("topic", "")
+        system_prompt = f"You are {self.name}. {self.role_description}\nSynthesize deep research, citations, and key insights for: {topic}"
+        messages = [{"role": "user", "content": f"Research Topic: {topic}"}]
+        
+        report = await self.router.generate(messages, system_prompt=system_prompt, task_type="complex")
+        return {"agent": self.name, "report": report}
+
+
+class DataAnalystAgent(BaseAgent):
+    """Specialized Sub-Agent for Data Science, Statistics, and Visualization."""
+
+    def __init__(self, config):
+        super().__init__("DataAnalyst", "Performs pandas dataset operations, statistical analysis, and plot generation.", config)
+
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        dataset_summary = input_data.get("dataset_summary", "")
+        question = input_data.get("question", "")
+        system_prompt = f"You are {self.name}. {self.role_description}\nAnalyze the data and generate python code to visualize key trends."
+        messages = [{"role": "user", "content": f"Question: {question}\nDataset Summary:\n{dataset_summary}"}]
+        
+        analysis = await self.router.generate(messages, system_prompt=system_prompt, task_type="code")
+        return {"agent": self.name, "analysis": analysis}
+
+
+class SysAdminAgent(BaseAgent):
+    """Specialized Sub-Agent for OS Administration, Process Automation, and Network Diagnostics."""
+
+    def __init__(self, config):
+        super().__init__("SysAdmin", "Manages OS processes, shell scripts, environment configurations, and network checks.", config)
+
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        sys_goal = input_data.get("sys_goal", "")
+        system_prompt = f"You are {self.name}. {self.role_description}\nProvide safe shell commands and script routines to accomplish the system administration goal."
+        messages = [{"role": "user", "content": f"SysAdmin Goal: {sys_goal}"}]
+        
+        routine = await self.router.generate(messages, system_prompt=system_prompt, task_type="fast")
+        return {"agent": self.name, "routine": routine}

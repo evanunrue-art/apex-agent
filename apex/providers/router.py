@@ -71,12 +71,16 @@ class HybridRouter:
 
         # Ultimate fallback: attempt Local DGX even for complex tasks
         if await self.local_dgx.is_available():
-            full_prompt = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
-            return await self.local_dgx.generate(
-                prompt=full_prompt,
-                system_prompt=system_prompt,
-                temperature=temperature
-            )
+            try:
+                full_prompt = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
+                return await self.local_dgx.generate(
+                    prompt=full_prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature
+                )
+            except Exception as e:
+                logger.warning(f"Local DGX fallback failed: {e}")
+
 
         # Mock fallback mode for testing / offline demo if no API keys or local servers are running
         return self._mock_fallback(messages, system_prompt, task_type)
