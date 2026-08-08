@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "apex-cli"
 version = "0.1.0"
-description = "Next-Generation Autonomous CLI Agentic Assistant powered by LATS, Tiered Cognitive Memory, and Local/Cloud DGX Hybrid Engine"
+description = "Autonomous Agentic CLI Platform powered by LATS, Tiered Cognitive Memory, and Local/Cloud DGX Engine"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -16,7 +16,24 @@ dependencies = [
     "httpx>=0.25.0",
     "psutil>=5.9.0",
     "tiktoken>=0.5.0",
-    "pyyaml>=6.0"
+    "pyyaml>=6.0",
+    "pandas>=2.0.0",
+    "starlette>=0.30.0",
+    "uvicorn>=0.20.0",
+    "pypdf>=3.0.0",
+    "python-docx>=1.0.0"
+]
+
+[project.optional-dependencies]
+data = ["pandas>=2.0.0"]
+web = ["starlette>=0.30.0", "uvicorn>=0.20.0"]
+docs = ["pypdf>=3.0.0", "python-docx>=1.0.0"]
+all = [
+    "pandas>=2.0.0",
+    "starlette>=0.30.0",
+    "uvicorn>=0.20.0",
+    "pypdf>=3.0.0",
+    "python-docx>=1.0.0"
 ]
 
 [project.scripts]

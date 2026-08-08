@@ -1,49 +1,55 @@
 import os
 import re
-import glob
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from apex.tools.security import resolve_and_verify_workspace_path
 
 class FileSystemTool:
-    """High-performance file system & code inspection utilities."""
+    """High-performance file system & code inspection utilities with workspace boundary enforcement."""
 
     def __init__(self, workspace: Optional[Path] = None):
-        self.workspace = workspace or Path.cwd()
+        self.workspace = (workspace or Path.cwd()).resolve()
 
     def view_file(self, relative_path: str, start_line: int = 1, end_line: int = 400) -> str:
-        target = self.workspace / relative_path
-        if not target.exists() or not target.is_file():
-            return f"Error: File '{relative_path}' not found."
         try:
+            target = resolve_and_verify_workspace_path(relative_path, self.workspace)
+            if not target.exists() or not target.is_file():
+                return f"Error: File '{relative_path}' not found."
             with open(target, "r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
             sliced = lines[max(0, start_line - 1):end_line]
             formatted = [f"{i + max(1, start_line):4d} | {line}" for i, line in enumerate(sliced)]
             return "".join(formatted)
+        except PermissionError as pe:
+            return f"Error: {pe}"
         except Exception as e:
             return f"Error reading file: {e}"
 
     def write_file(self, relative_path: str, content: str) -> str:
-        target = self.workspace / relative_path
-        target.parent.mkdir(parents=True, exist_ok=True)
         try:
+            target = resolve_and_verify_workspace_path(relative_path, self.workspace)
+            target.parent.mkdir(parents=True, exist_ok=True)
             with open(target, "w", encoding="utf-8") as f:
                 f.write(content)
             return f"Successfully wrote to {relative_path}"
+        except PermissionError as pe:
+            return f"Error: {pe}"
         except Exception as e:
             return f"Error writing file: {e}"
 
     def replace_content(self, relative_path: str, target_string: str, replacement_string: str) -> str:
-        target = self.workspace / relative_path
-        if not target.exists():
-            return f"Error: File '{relative_path}' does not exist."
         try:
+            target = resolve_and_verify_workspace_path(relative_path, self.workspace)
+            if not target.exists():
+                return f"Error: File '{relative_path}' does not exist."
             content = target.read_text(encoding="utf-8", errors="replace")
             if target_string not in content:
                 return f"Error: Target string not found in {relative_path}"
             new_content = content.replace(target_string, replacement_string, 1)
             target.write_text(new_content, encoding="utf-8")
             return f"Successfully replaced target string in {relative_path}"
+        except PermissionError as pe:
+            return f"Error: {pe}"
         except Exception as e:
             return f"Error updating file: {e}"
 

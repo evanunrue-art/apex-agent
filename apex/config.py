@@ -15,12 +15,13 @@ class HardwareSpecs(BaseModel):
     gpu_memory_free_mb: float = 0.0
     cpu_cores: int = 1
     total_ram_gb: float = 0.0
+    is_unified_memory: bool = False
 
 class Config(BaseModel):
     # LLM Routing Settings
-    primary_provider: str = Field(default="hybrid", description="hybrid, local_dgx, openai, anthropic, gemini, deepseek")
-    local_dgx_endpoint: str = Field(default="http://localhost:11434", description="Ollama or vLLM endpoint")
-    local_model: str = Field(default="qwen2.5-coder:latest", description="Local DGX fast model")
+    primary_provider: str = Field(default="hybrid", description="hybrid, local_dgx, ollama, vllm, nim, openai, anthropic, gemini, deepseek")
+    local_dgx_endpoint: str = Field(default="http://localhost:11434", description="Ollama, vLLM, or NIM endpoint")
+    local_model: str = Field(default="qwen2.5-coder:latest", description="Local fast model")
     cloud_model: str = Field(default="gpt-4o", description="Frontier reasoning model")
     
     # API Keys
@@ -39,6 +40,7 @@ class Config(BaseModel):
     enable_git_checkpoints: bool = True
     enable_skill_synthesis: bool = True
     enable_tui: bool = True
+    strict_governance: bool = True
     
     # Paths
     apex_dir: Path = Field(default_factory=lambda: Path.cwd() / ".apex")
@@ -51,8 +53,8 @@ class Config(BaseModel):
                 with open(target, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f) or {}
                 return cls(**data)
-            except Exception:
-                pass
+            except Exception as e:
+                raise ValueError(f"Invalid configuration file at '{target}': {str(e)}")
         return cls()
 
     def save(self, config_path: Optional[Path] = None):
@@ -61,13 +63,20 @@ class Config(BaseModel):
         with open(target, "w", encoding="utf-8") as f:
             yaml.dump(self.model_dump(mode="json"), f, default_flow_style=False)
 
+def validate_workspace_path(workspace: Path) -> Path:
+    """Refuses execution if workspace is home directory."""
+    resolved = workspace.resolve()
+    home_dir = Path.home().resolve()
+    if resolved == home_dir:
+        raise ValueError(f"Autonomous execution is prohibited in user home directory '{home_dir}'. Specify a dedicated workspace directory via --workspace or 'apex init'.")
+    return resolved
+
 def detect_hardware() -> HardwareSpecs:
     import psutil
     specs = HardwareSpecs()
     specs.cpu_cores = psutil.cpu_count(logical=True) or 1
     specs.total_ram_gb = round(psutil.virtual_memory().total / (1024 ** 3), 2)
     
-    # Check NVIDIA GPU via nvidia-smi
     nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi:
         try:
@@ -77,12 +86,23 @@ def detect_hardware() -> HardwareSpecs:
             )
             if res.returncode == 0 and res.stdout.strip():
                 lines = res.stdout.strip().split("\n")
-                first = lines[0].split(",")
-                if len(first) >= 3:
+                first = [item.strip() for item in lines[0].split(",")]
+                if len(first) >= 1 and first[0]:
                     specs.has_nvidia_gpu = True
-                    specs.gpu_name = first[0].strip()
-                    specs.gpu_memory_total_mb = float(first[1].strip())
-                    specs.gpu_memory_free_mb = float(first[2].strip())
+                    specs.gpu_name = first[0]
+                    
+                    # Safe parsing of numeric memory fields for unified memory (DGX Spark)
+                    try:
+                        specs.gpu_memory_total_mb = float(first[1])
+                    except (ValueError, IndexError):
+                        specs.gpu_memory_total_mb = specs.total_ram_gb * 1024
+                        specs.is_unified_memory = True
+                        
+                    try:
+                        specs.gpu_memory_free_mb = float(first[2])
+                    except (ValueError, IndexError):
+                        specs.gpu_memory_free_mb = (psutil.virtual_memory().available / (1024 ** 2))
+                        specs.is_unified_memory = True
         except Exception:
             pass
             

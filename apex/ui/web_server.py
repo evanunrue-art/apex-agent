@@ -1,6 +1,7 @@
 import json
 import asyncio
 import os
+import logging
 from pathlib import Path
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
@@ -8,6 +9,8 @@ from starlette.routing import Route
 import uvicorn
 from apex.config import Config, detect_hardware
 from apex.core.orchestrator import AgentOrchestrator
+
+logger = logging.getLogger("apex.web")
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -21,6 +24,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --card-bg: rgba(30, 41, 59, 0.7);
             --accent-purple: #8b5cf6;
             --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
             --text-color: #f8fafc;
             --subtext: #94a3b8;
         }
@@ -88,6 +92,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             border: 1px solid rgba(255,255,255,0.08);
             align-self: flex-start;
             border-bottom-left-radius: 2px;
+        }
+        .msg.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            color: #fca5a5;
         }
         .controls {
             display: flex;
@@ -172,9 +181,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     body: JSON.stringify({prompt: text})
                 });
                 const data = await res.json();
+                if (data.status === 'error' || data.has_denial) {
+                    apexDiv.className = 'msg apex error';
+                }
                 apexDiv.innerText = data.answer;
             } catch (err) {
-                apexDiv.innerText = "Error processing request: " + err;
+                apexDiv.className = 'msg apex error';
+                apexDiv.innerText = "Execution Error: " + err;
             }
             chat.scrollTop = chat.scrollHeight;
         });
@@ -197,14 +210,29 @@ async def api_ask(request):
     config = Config.load()
     orchestrator = AgentOrchestrator(config)
     
+    events = []
+    denial_reasons = []
     answer = ""
-    async for event in orchestrator.run(prompt):
-        if event.get("type") == "thought":
-            answer += event.get("text", "") + "\n"
-        elif event.get("type") == "final":
-            answer = event.get("content", answer)
+    status = "success"
+    
+    try:
+        # Web requests run in unattended mode (is_interactive=False)
+        async for event in orchestrator.run(prompt, is_interactive=False):
+            ev_type = event.get("type")
+            if ev_type == "governance_denial":
+                denial_reasons.append(event.get("reason"))
+                status = "governance_denied"
+            elif ev_type == "thought":
+                answer += event.get("text", "") + "\n"
+            elif ev_type == "final":
+                answer = event.get("content", answer)
+                
+        if denial_reasons:
+            answer = "⚠️ Action Denied by Governance Policy:\n" + "\n".join(denial_reasons)
             
-    return JSONResponse({"answer": answer})
+        return JSONResponse({"answer": answer, "status": status, "has_denial": len(denial_reasons) > 0})
+    except Exception as e:
+        return JSONResponse({"answer": f"Provider / System Error: {str(e)}", "status": "error", "has_denial": False}, status_code=500)
 
 app = Starlette(routes=[
     Route('/', homepage),
@@ -212,6 +240,13 @@ app = Starlette(routes=[
     Route('/api/ask', api_ask, methods=['POST'])
 ])
 
-def start_web_server(port: int = 7860):
-    print(f"⚡ APEX Web Interface launching at http://localhost:{port}")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="error")
+def start_web_server(host: str = "127.0.0.1", port: int = 7860, auth_token: Optional[str] = None):
+    # Enforce loopback binding or required auth token for public binding
+    if host not in ["127.0.0.1", "localhost"]:
+        token = auth_token or os.getenv("APEX_WEB_TOKEN")
+        if not token:
+            raise ValueError(f"SECURITY WARNING: Non-loopback binding to '{host}' requires an authentication token. Provide via --token or APEX_WEB_TOKEN env var.")
+        print(f"⚠️ SECURITY NOTICE: APEX Web Server bound to public host '{host}' with authentication token enforcement.")
+        
+    print(f"⚡ APEX Web Interface launching at http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="error")

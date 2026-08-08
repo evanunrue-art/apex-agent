@@ -14,41 +14,73 @@ The goal of APEX is to provide a single interface for executing multi-domain dig
 
 ## Core Features
 
-- **Document Ingestion & Reference Processing**: Parses and indexes PDF (`.pdf`), PowerPoint (`.pptx`), Word (`.docx`), and plain text/markdown documents into the Cognitive Knowledge Graph for reference and multi-document synthesis (`apex read`).
-- **Local & Hybrid Model Routing**: Connects to local LLM inference servers (`http://localhost:11434` or `http://localhost:8000/v1`) and cloud provider APIs (OpenAI, Anthropic, Gemini, DeepSeek), routing sub-tasks based on task complexity.
+- **Pre-Execution Governance & Risk Policy**: Evaluates tool action risk (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) before execution. Arbitrary shell (`run_command`) and Python (`execute_python_script`) executions require explicit approval. Unattended modes (headless, dashboard, daemon, mesh) default-deny actions requiring approval.
+- **Workspace Containment**: Enforces workspace boundary containment across filesystem, document ingestion, and data tools, rejecting absolute paths outside the workspace, `..` path traversals, and symlink escapes.
+- **Explicit Workspace Management**: Supports `apex init` and global `--workspace` parameters. Prohibits autonomous execution when the workspace is the user's home directory (`$HOME`).
+- **Safe Checkpoint & Rollback**: Persists checkpoint metadata (`.apex/checkpoints.json`) and requires explicit confirmation before rollback, displaying affected files without implicitly deleting untracked files.
+- **Document Ingestion**: Parses and indexes PDF (`.pdf`), PowerPoint (`.pptx`), Word (`.docx`), and text files into the Cognitive Knowledge Graph (`apex read`).
+- **Local & Hybrid Model Routing**: Endpoint normalization supporting both `http://host:8000` and `http://host:8000/v1` without duplicate `/v1/v1` paths. Validates model IDs against `/v1/models` and `/api/tags`, surfacing actionable errors.
 - **Tree Search Execution (LATS)**: Uses Monte Carlo Tree Search (MCTS) with Upper Confidence Bound for Trees (UCT) scoring to generate and evaluate candidate execution paths.
-- **Anticipatory Intelligence Engine**: Analyzes workspace files and telemetry to offer proactive recommendations (`apex suggest`).
-- **Daily Productivity Digest**: Synthesizes task history and skill state into a daily summary (`apex digest`).
-- **4-Tier Memory System**:
-  - *Working Memory*: Dynamic token context budget and message window manager.
-  - *Episodic Memory*: Session trajectory and past task recorder.
-  - *Semantic Memory*: Codebase symbol and AST indexer.
-  - *Procedural Memory*: Dynamic skill synthesizer storing reusable Python and Bash tools in `.apex/skills/`.
-- **Cognitive Knowledge Graph**: Indexes session actions, file changes, reference documents, and research notes into a local SQLite database (`.apex/cognitive_graph.db`).
-- **Policy Governance & Risk Evaluation**: Categorizes actions into risk tiers (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) and applies safety rules to command execution.
-- **Shadow Git Checkpointing**: Takes Git commits before high-risk edits to allow 1-click workspace rollbacks.
-- **Multi-Model Adversarial Debate**: Runs cross-examination of proposed solutions between models before executing code.
-- **24/7 Background Ambient Mesh**: Optional background service for monitoring workspace health and running periodic verification tests.
-- **Web Interface**: Includes a local web dashboard (`apex serve`) hosted at `http://localhost:7860`.
+- **Anticipatory Intelligence & Daily Digest**: Offers proactive recommendations (`apex suggest`) and 2-minute daily activity summaries (`apex digest`).
+- **4-Tier Memory & Knowledge Graph**: Combines Working, Episodic, Semantic AST, and Procedural memory with a local SQLite Cognitive Knowledge Graph (`.apex/cognitive_graph.db`).
+- **Multi-Model Adversarial Debate**: Cross-examines proposed solutions between models before executing code (`apex debate`).
+- **24/7 Background Ambient Mesh**: Optional background service for monitoring workspace health with strict governance safeguards (`apex mesh`).
+- **Local Web Interface**: Includes a loopback-bound web dashboard (`apex serve`) hosted at `http://127.0.0.1:7860`. Non-loopback binding requires authentication token enforcement.
 
 ---
 
-## Installation
+## Installation & Setup
 
-### Requirements
+### Prerequisites
 - Python 3.10+
 - Git 2.30+
 - (Optional) Local GPU inference server (Ollama, vLLM, or NVIDIA NIM)
 
-### Setup
+### Clone & Virtual Environment Setup
 
 ```bash
-# Option 1: Install as an editable package (Recommended)
-pip install -e .
+# 1. Clone the repository
+git clone https://github.com/evanunrue-art/apex-agent.git
+cd apex-agent
 
-# Option 2: Install dependencies via requirements file
-pip install -r requirements.txt
+# 2. Create and activate a virtual environment
+python -m venv .venv
+
+# On Linux/macOS:
+source .venv/bin/activate
+
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+# 3. Install APEX package and all dependencies
+pip install -e .
 ```
+
+### Optional Extras Installation
+
+```bash
+# Install specific optional dependency sets
+pip install -e ".[data]"     # Data analysis (pandas)
+pip install -e ".[web]"      # Web dashboard (starlette, uvicorn)
+pip install -e ".[docs]"     # Document ingestion (pypdf, python-docx)
+pip install -e ".[all]"      # All optional extras
+```
+
+---
+
+## Workspace Initialization
+
+Before executing tasks, initialize a dedicated workspace directory:
+
+```bash
+# Initialize current directory as an APEX workspace
+apex init
+
+# Or initialize a specific workspace directory
+apex init --workspace ./my-project
+```
+
+*Note: Autonomous execution is prohibited in the user's home directory (`$HOME`).*
 
 ---
 
@@ -56,8 +88,9 @@ pip install -r requirements.txt
 
 | Command | Purpose | Example |
 | :--- | :--- | :--- |
+| `apex init` | Initializes an APEX workspace configuration | `apex init --workspace ./my-project` |
 | `apex read` | Parses PDF, PPTX, DOCX, or text file into Knowledge Graph | `apex read "paper.pdf"` |
-| `apex serve` | Launches local web dashboard at `http://localhost:7860` | `apex serve` |
+| `apex serve` | Launches local web dashboard (bound to `127.0.0.1:7860`) | `apex serve` |
 | `apex ask` | Plain-language question answering | `apex ask "Explain how HTTP/3 works"` |
 | `apex suggest` | Displays proactive anticipatory recommendations | `apex suggest` |
 | `apex digest` | Generates a 2-minute daily productivity summary | `apex digest` |
@@ -74,7 +107,7 @@ pip install -r requirements.txt
 | `apex dgx` | Checks local GPU status and local model endpoints | `apex dgx` |
 | `apex mesh` | Starts ambient background mesh service | `apex mesh` |
 | `apex daemon` | Runs continuous background watchdog test suite | `apex daemon` |
-| `apex undo` | Rolls back workspace to previous shadow snapshot | `apex undo` |
+| `apex undo` | Rolls back workspace to previous shadow snapshot | `apex undo --target 1 --force` |
 
 ---
 
@@ -83,7 +116,7 @@ pip install -r requirements.txt
 Configuration parameters are stored in `.apex/config.yaml`:
 
 ```yaml
-primary_provider: hybrid          # Options: hybrid, local_dgx, openai, anthropic, deepseek
+primary_provider: hybrid          # Options: hybrid, local_dgx, ollama, vllm, nim, openai, anthropic, deepseek
 local_dgx_endpoint: http://localhost:11434
 local_model: qwen2.5-coder:latest
 cloud_model: gpt-4o
@@ -95,13 +128,14 @@ max_context_tokens: 128000
 
 enable_git_checkpoints: true
 enable_skill_synthesis: true
+strict_governance: true
 ```
 
 ---
 
 ## Testing
 
-Run the automated test suite to verify document ingestion, tool execution, memory indexing, LATS search, and CLI interfaces:
+Run the automated test suite to verify governance enforcement, path containment, endpoint normalization, document ingestion, and CLI interfaces:
 
 ```bash
 python -m unittest discover -s tests

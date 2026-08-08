@@ -4,16 +4,21 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional
+from apex.tools.security import resolve_and_verify_workspace_path
 
 class DataAnalysisTool:
-    """Executes inline Python data analysis scripts using pandas, numpy, and matplotlib."""
+    """Executes inline Python data analysis scripts using pandas with workspace path containment."""
 
     def __init__(self, workspace: Optional[Path] = None):
-        self.workspace = workspace or Path.cwd()
+        self.workspace = (workspace or Path.cwd()).resolve()
 
     def analyze_dataset(self, csv_or_json_path: str) -> str:
         """Loads a dataset (CSV/JSON/Parquet) and returns summary statistics."""
-        target = self.workspace / csv_or_json_path
+        try:
+            target = resolve_and_verify_workspace_path(csv_or_json_path, self.workspace)
+        except PermissionError as pe:
+            return f"Error: {pe}"
+            
         if not target.exists():
             return f"Error: Dataset '{csv_or_json_path}' not found."
             
@@ -50,7 +55,7 @@ print(json.dumps(info, default=str, indent=2))
             return f"Data analysis execution failed: {e}"
 
     def execute_python_script(self, code_snippet: str) -> str:
-        """Executes a arbitrary data transformation or plotting script."""
+        """Executes an inline script in the workspace directory."""
         try:
             res = subprocess.run([sys.executable, "-c", code_snippet], cwd=self.workspace, capture_output=True, text=True, timeout=45)
             output = f"[Exit Code {res.returncode}]\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
