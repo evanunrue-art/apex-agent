@@ -51,8 +51,8 @@ def run(
     if local_only:
         config.primary_provider = "local_dgx"
     
-    tui = ApexInteractiveTUI(config)
-    asyncio.run(tui.run_goal(goal))
+    tui = ApexInteractiveTUI(config, workspace=target_workspace)
+    asyncio.run(tui.run_goal(goal, is_interactive=interactive))
 
 @app.command()
 def read(
@@ -75,8 +75,8 @@ def ask(
     """Zero-friction plain English Q&A."""
     target_workspace = validate_workspace_path(workspace)
     config = Config.load(target_workspace / ".apex" / "config.yaml")
-    tui = ApexInteractiveTUI(config)
-    asyncio.run(tui.run_goal(question))
+    tui = ApexInteractiveTUI(config, workspace=target_workspace)
+    asyncio.run(tui.run_goal(question, is_interactive=False))
 
 @app.command()
 def intent(

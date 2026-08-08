@@ -1,5 +1,6 @@
 import json
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from apex.config import Config, validate_workspace_path
 from apex.providers.router import HybridRouter
@@ -35,13 +36,14 @@ If your task is completely finished, set "tool" to "final_answer" and put your r
 """
 
 class AgentOrchestrator:
-    """Core Cognitive Loop Orchestrator for APEX with strict governance enforcement."""
+    """Core Cognitive Loop Orchestrator for APEX with strict workspace and governance enforcement."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, workspace: Optional[Path] = None):
         self.config = config
+        self.workspace = validate_workspace_path(workspace or config.apex_dir.parent or Path.cwd())
         self.router = HybridRouter(config)
-        self.tools = ToolRegistry()
-        self.memory = MemoryManager()
+        self.tools = ToolRegistry(workspace=self.workspace)
+        self.memory = MemoryManager(workspace=self.workspace)
         self.governance = GovernancePolicyEngine()
         self.lats = LATSTreeSearch(config.lats_max_depth, config.lats_max_branches, config.lats_exploration_weight)
         self.context_mgr = ContextBudgetManager(config.max_context_tokens)
@@ -54,12 +56,9 @@ class AgentOrchestrator:
         is_interactive: bool = False,
         approved_actions: Optional[List[str]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Runs the main agent execution trajectory with strict pre-execution governance."""
+        """Runs the main agent execution trajectory with workspace propagation and pre-execution governance."""
         
-        # Enforce workspace boundary check
-        validate_workspace_path(self.tools.fs.workspace)
-        
-        yield {"type": "status", "message": "Initializing APEX Cognitive Engine..."}
+        yield {"type": "status", "message": f"Initializing APEX Cognitive Engine for workspace '{self.workspace}'..."}
         
         mem_snapshot = self.memory.get_context_snapshot(user_goal)
         yield {"type": "memory", "snapshot": mem_snapshot}
@@ -68,7 +67,7 @@ class AgentOrchestrator:
             {"role": "user", "content": f"User Goal: {user_goal}\nMemory Context:\n{json.dumps(mem_snapshot, indent=2)}"}
         ]
         
-        if self.config.enable_git_checkpoints and (self.tools.fs.workspace / ".git").exists():
+        if self.config.enable_git_checkpoints and (self.workspace / ".git").exists():
             self.tools.git.create_snapshot(f"Goal: {user_goal[:30]}")
             
         root = LATSNode(thought=f"Root goal: {user_goal}")

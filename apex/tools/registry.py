@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Dict, Any, Callable, List, Optional
 from apex.tools.filesystem import FileSystemTool
 from apex.tools.terminal import TerminalEngine
@@ -10,21 +11,21 @@ from apex.tools.research_synthesis import ResearchSynthesisTool
 from apex.tools.document_ingestion import DocumentIngestionTool
 
 class ToolRegistry:
-    """Universal Tool Registry for APEX."""
+    """Universal Tool Registry for APEX with workspace propagation."""
 
-    def __init__(self):
-        self.fs = FileSystemTool()
-        self.term = TerminalEngine()
-        self.git = GitCheckpointManager()
+    def __init__(self, workspace: Optional[Path] = None):
+        self.workspace = (workspace or Path.cwd()).resolve()
+        self.fs = FileSystemTool(workspace=self.workspace)
+        self.term = TerminalEngine(cwd=str(self.workspace))
+        self.git = GitCheckpointManager(workspace_dir=self.workspace)
         self.browser = BrowserTool()
-        self.data_tool = DataAnalysisTool()
+        self.data_tool = DataAnalysisTool(workspace=self.workspace)
         self.sys_tool = SysAdminTool()
         self.research_tool = ResearchSynthesisTool()
-        self.doc_tool = DocumentIngestionTool()
+        self.doc_tool = DocumentIngestionTool(workspace=self.workspace)
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
         return [
-            # Document Ingestion Tools
             {
                 "name": "parse_document",
                 "description": "Extract text content from PDF, PPTX, DOCX, or text reference files.",
@@ -47,7 +48,6 @@ class ToolRegistry:
                     "required": ["file_path"]
                 }
             },
-            # File & Code Tools
             {
                 "name": "view_file",
                 "description": "View contents of any text or code file with line numbers.",
@@ -120,7 +120,6 @@ class ToolRegistry:
                     }
                 }
             },
-            # Data & Math Analytics Tools
             {
                 "name": "analyze_dataset",
                 "description": "Load a CSV/JSON dataset and produce summary statistics.",
@@ -143,7 +142,6 @@ class ToolRegistry:
                     "required": ["code_snippet"]
                 }
             },
-            # System Admin & Telemetry Tools
             {
                 "name": "get_system_metrics",
                 "description": "Retrieve active CPU, Memory, Disk, and system hardware telemetry.",
@@ -171,7 +169,6 @@ class ToolRegistry:
                     "required": ["port"]
                 }
             },
-            # Web & Autonomous Research Tools
             {
                 "name": "fetch_web_page",
                 "description": "Fetch text content from a web URL.",
@@ -194,7 +191,6 @@ class ToolRegistry:
                     "required": ["topic"]
                 }
             },
-            # Checkpoint Tools
             {
                 "name": "create_checkpoint",
                 "description": "Create a shadow Git checkpoint snapshot.",
@@ -260,8 +256,8 @@ class ToolRegistry:
                 sha = self.git.create_snapshot(args.get("label", "Manual Checkpoint"))
                 return f"Created checkpoint SHA: {sha}"
             elif tool_name == "rollback_checkpoint":
-                ok = self.git.rollback_to_snapshot(args.get("target"))
-                return "Successfully rolled back workspace." if ok else "Failed to rollback workspace."
+                ok, msg = self.git.rollback_to_snapshot(args.get("target"), confirm=True)
+                return msg if ok else f"Rollback failed: {msg}"
             else:
                 return f"Error: Unknown tool '{tool_name}'."
         except Exception as e:

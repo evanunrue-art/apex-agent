@@ -1,4 +1,6 @@
 import asyncio
+from pathlib import Path
+from typing import Optional
 from rich.console import Console
 from rich.live import Live
 from rich.layout import Layout
@@ -8,16 +10,15 @@ from apex.ui.views import render_banner, render_status_bar, render_thought_panel
 
 console = Console(legacy_windows=False)
 
-
 class ApexInteractiveTUI:
-    """Interactive TUI Dashboard for APEX."""
+    """Interactive TUI Dashboard for APEX with workspace and governance propagation."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, workspace: Optional[Path] = None):
         self.config = config
-        self.orchestrator = AgentOrchestrator(config)
+        self.orchestrator = AgentOrchestrator(config, workspace=workspace)
         self.hardware = detect_hardware()
 
-    async def run_goal(self, goal: str):
+    async def run_goal(self, goal: str, is_interactive: bool = True):
         layout = Layout()
         layout.split(
             Layout(name="header", size=4),
@@ -37,12 +38,14 @@ class ApexInteractiveTUI:
         layout["observation"].update(render_observation_panel("Awaiting agent actions..."))
 
         with Live(layout, refresh_per_second=4, console=console):
-            async for event in self.orchestrator.run(goal):
+            async for event in self.orchestrator.run(goal, is_interactive=is_interactive):
                 event_type = event.get("type")
                 if event_type == "thought":
                     layout["thought"].update(render_thought_panel(event.get("text", "")))
                 elif event_type == "observation":
                     layout["observation"].update(render_observation_panel(event.get("observation", "")))
+                elif event_type == "governance_denial":
+                    layout["observation"].update(render_observation_panel(f"⚠️ {event.get('reason', '')}"))
                 elif event_type == "final":
                     layout["thought"].update(render_thought_panel(f"🎉 COMPLETED:\n{event.get('content', '')}"))
                 await asyncio.sleep(0.05)
