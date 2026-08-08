@@ -1,0 +1,65 @@
+Metadata-Version: 2.4
+Name: apex-cli
+Version: 0.1.0
+Summary: Next-Generation Autonomous CLI Agentic Assistant powered by LATS, Tiered Cognitive Memory, and Local/Cloud DGX Hybrid Engine
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: rich>=13.0.0
+Requires-Dist: textual>=0.40.0
+Requires-Dist: typer>=0.9.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: psutil>=5.9.0
+Requires-Dist: tiktoken>=0.5.0
+Requires-Dist: pyyaml>=6.0
+
+# APEX CLI: Autonomous Tree-Search & Hybrid Cognitive Engine
+
+APEX is a next-generation CLI agentic assistant built with **Language Agent Tree Search (LATS)**, **4-Tier Cognitive Memory**, **Voyager Skill Synthesis**, **NVIDIA DGX Local/Cloud Hybrid LLM Routing**, and **Shadow-Git Instant Rollback**.
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Option 1: Editable package install (recommended)
+pip install -e .
+
+# Option 2: Requirements file
+pip install -r requirements.txt
+```
+
+### Usage Commands
+
+```bash
+# 1. Run Autonomous Coding Task
+apex run "Create a FastAPI backend with PostgreSQL models"
+
+# 2. Inspect Local DGX GPU & Model Status
+apex dgx
+
+# 3. Check 4-Tier Cognitive Memory
+apex memory
+
+# 4. View Synthesized Voyager Skills
+apex skills
+
+# 5. Instant Shadow-Git Rollback
+apex undo
+```
+
+---
+
+## 🛠️ Key Features & Architecture
+
+- **LATS Tree-Search**: MCTS decision-tree exploration with UCT scoring and shadow git trajectory rollbacks.
+- **4-Tier Cognitive Memory**:
+  - *Working Memory*: Dynamic context token budget.
+  - *Episodic Memory*: Cross-session trajectory store.
+  - *Semantic Memory*: Real-time AST symbol graph indexer.
+  - *Procedural Memory*: Voyager-style dynamic tool synthesizer (`.apex/skills/`).
+- **NVIDIA DGX Local/Cloud Hybrid Engine**: Auto-detects local GPU hardware via NVML and connects to Ollama, vLLM, or NVIDIA NIM endpoints on `http://localhost:11434` / `http://localhost:8000/v1`.
+- **Shadow Checkpoint Engine**: Automatic zero-risk git snapshots before code edits.
+- **Multi-Agent Swarm**: Architect, Coder, Auditor, and Debugger sub-agents.
