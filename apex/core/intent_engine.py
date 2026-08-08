@@ -29,8 +29,9 @@ class EphemeralIntentEngine:
             if event.get("type") == "action":
                 tool = event.get("tool")
                 args = event.get("args", {})
-                risk_level, reason = self.governance.evaluate_action_risk(tool, args)
+                risk_level, requires_approval, reason = self.governance.evaluate_action_risk(tool, args)
                 event["risk_level"] = risk_level.value
+                event["requires_approval"] = requires_approval
                 event["governance_reason"] = reason
             yield event
 

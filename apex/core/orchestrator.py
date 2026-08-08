@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, AsyncGenerator
+from typing import List, Dict, Any, Optional, AsyncGenerator, Set, Callable
 from apex.config import Config, validate_workspace_path
 from apex.providers.router import HybridRouter
 from apex.tools.registry import ToolRegistry
@@ -36,7 +36,7 @@ If your task is completely finished, set "tool" to "final_answer" and put your r
 """
 
 class AgentOrchestrator:
-    """Core Cognitive Loop Orchestrator for APEX with strict workspace and governance enforcement."""
+    """Core Cognitive Loop Orchestrator for APEX with strict workspace and granular governance enforcement."""
 
     def __init__(self, config: Config, workspace: Optional[Path] = None):
         self.config = config
@@ -54,7 +54,8 @@ class AgentOrchestrator:
         user_goal: str,
         enable_tree_search: bool = True,
         is_interactive: bool = False,
-        approved_actions: Optional[List[str]] = None
+        approved_fingerprints: Optional[Set[str]] = None,
+        approval_callback: Optional[Callable[[str, Dict[str, Any], str], bool]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Runs the main agent execution trajectory with workspace propagation and pre-execution governance."""
         
@@ -75,7 +76,7 @@ class AgentOrchestrator:
         
         max_steps = 15
         step = 0
-        approved_set = set(approved_actions or [])
+        approved_set = set(approved_fingerprints or [])
         
         while step < max_steps:
             step += 1
@@ -112,17 +113,33 @@ class AgentOrchestrator:
                 )
                 break
                 
-            # Pre-execution Governance Evaluation
-            user_approved = tool_name in approved_set
-            allowed, reason = self.governance.validate_execution_allowed(
-                tool_name, args, is_interactive=is_interactive, approved_by_user=user_approved
+            fingerprint = self.governance.compute_action_fingerprint(tool_name, args)
+            level, requires_approval, reason = self.governance.evaluate_action_risk(tool_name, args)
+            
+            # Interactive Approval Callback prompt if required
+            if is_interactive and requires_approval and fingerprint not in approved_set:
+                yield {
+                    "type": "approval_required",
+                    "tool": tool_name,
+                    "args": args,
+                    "fingerprint": fingerprint,
+                    "risk_level": level.value,
+                    "reason": reason
+                }
+                if approval_callback:
+                    user_confirmed = approval_callback(tool_name, args, reason)
+                    if user_confirmed:
+                        approved_set.add(fingerprint)
+
+            allowed, gov_reason = self.governance.validate_execution_allowed(
+                tool_name, args, is_interactive=is_interactive, approved_fingerprints=approved_set
             )
             
-            yield {"type": "action", "tool": tool_name, "args": args, "governance_allowed": allowed, "governance_reason": reason}
+            yield {"type": "action", "tool": tool_name, "args": args, "fingerprint": fingerprint, "governance_allowed": allowed, "governance_reason": gov_reason}
             
             if not allowed:
-                obs = f"Action Denied by Governance Policy: {reason}"
-                yield {"type": "governance_denial", "tool": tool_name, "reason": reason}
+                obs = f"Action Denied by Governance Policy: {gov_reason}"
+                yield {"type": "governance_denial", "tool": tool_name, "reason": gov_reason}
             else:
                 obs = await self.tools.execute(tool_name, args)
                 yield {"type": "observation", "observation": obs}

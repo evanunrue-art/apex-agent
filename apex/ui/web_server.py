@@ -2,15 +2,19 @@ import json
 import asyncio
 import os
 import logging
+from typing import Optional, Dict, Any
 from pathlib import Path
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
+from starlette.requests import Request
 import uvicorn
 from apex.config import Config, detect_hardware
 from apex.core.orchestrator import AgentOrchestrator
 
 logger = logging.getLogger("apex.web")
+
+GLOBAL_AUTH_TOKEN: Optional[str] = None
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -196,21 +200,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-async def homepage(request):
+def verify_token(request: Request) -> bool:
+    if not GLOBAL_AUTH_TOKEN:
+        return True
+    auth_header = request.headers.get("Authorization", "")
+    query_token = request.query_params.get("token", "")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        if token == GLOBAL_AUTH_TOKEN:
+            return True
+    if query_token == GLOBAL_AUTH_TOKEN:
+        return True
+    return False
+
+async def homepage(request: Request):
     return HTMLResponse(HTML_TEMPLATE)
 
-async def api_hardware(request):
+async def api_hardware(request: Request):
+    if not verify_token(request):
+        return JSONResponse({"error": "Unauthorized. Invalid or missing authentication token."}, status_code=401)
     specs = detect_hardware()
     return JSONResponse(specs.model_dump())
 
-async def api_ask(request):
+async def api_ask(request: Request):
+    if not verify_token(request):
+        return JSONResponse({"error": "Unauthorized. Invalid or missing authentication token."}, status_code=401)
     data = await request.json()
     prompt = data.get("prompt", "")
     
     config = Config.load()
     orchestrator = AgentOrchestrator(config)
     
-    events = []
     denial_reasons = []
     answer = ""
     status = "success"
@@ -241,10 +261,11 @@ app = Starlette(routes=[
 ])
 
 def start_web_server(host: str = "127.0.0.1", port: int = 7860, auth_token: Optional[str] = None):
-    # Enforce loopback binding or required auth token for public binding
+    global GLOBAL_AUTH_TOKEN
+    GLOBAL_AUTH_TOKEN = auth_token or os.getenv("APEX_WEB_TOKEN")
+    
     if host not in ["127.0.0.1", "localhost"]:
-        token = auth_token or os.getenv("APEX_WEB_TOKEN")
-        if not token:
+        if not GLOBAL_AUTH_TOKEN:
             raise ValueError(f"SECURITY WARNING: Non-loopback binding to '{host}' requires an authentication token. Provide via --token or APEX_WEB_TOKEN env var.")
         print(f"⚠️ SECURITY NOTICE: APEX Web Server bound to public host '{host}' with authentication token enforcement.")
         

@@ -19,9 +19,9 @@ def normalize_endpoint_url(base_url: str) -> Tuple[str, str]:
 
 
 class LocalDGXProvider:
-    """Interface for local GPU endpoints (Ollama, vLLM, NIM) with endpoint normalization and model discovery validation."""
+    """Interface for local GPU endpoints (vLLM, NIM, Ollama) with endpoint normalization and model discovery validation."""
     
-    def __init__(self, endpoint: str = "http://localhost:11434", default_model: str = "qwen2.5-coder:latest", provider_type: str = "hybrid"):
+    def __init__(self, endpoint: str = "http://localhost:11434", default_model: str = "qwen2.5-coder:latest", provider_type: str = "local_dgx"):
         self.root_url, self.v1_url = normalize_endpoint_url(endpoint)
         self.default_model = default_model
         self.provider_type = provider_type.lower()
@@ -98,26 +98,25 @@ class LocalDGXProvider:
         messages.append({"role": "user", "content": prompt})
 
         async with httpx.AsyncClient(timeout=90.0) as client:
-            # Prefer vLLM / NIM OpenAI endpoint if provider_type is vllm or nim
-            if self.provider_type in ["vllm", "nim", "hybrid"]:
-                try:
-                    res = await client.post(
-                        f"{self.v1_url}/chat/completions",
-                        json={
-                            "model": target_model,
-                            "messages": messages,
-                            "temperature": temperature,
-                            "max_tokens": max_tokens
-                        }
-                    )
-                    if res.status_code == 200:
-                        data = res.json()
-                        return data["choices"][0]["message"]["content"]
-                except Exception as e:
-                    if self.provider_type in ["vllm", "nim"]:
-                        raise RuntimeError(f"Local {self.provider_type.upper()} endpoint '{self.v1_url}' error: {e}")
+            # 1. Try OpenAI / vLLM / NIM chat completions endpoint first for all local DGX / vLLM / NIM endpoints
+            try:
+                res = await client.post(
+                    f"{self.v1_url}/chat/completions",
+                    json={
+                        "model": target_model,
+                        "messages": messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens
+                    }
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    return data["choices"][0]["message"]["content"]
+            except Exception as e:
+                if self.provider_type in ["vllm", "nim"]:
+                    raise RuntimeError(f"Local {self.provider_type.upper()} endpoint '{self.v1_url}' error: {e}")
                         
-            # Ollama API
+            # 2. Fall back to Ollama native chat endpoint
             res = await client.post(
                 f"{self.root_url}/api/chat",
                 json={

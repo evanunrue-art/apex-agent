@@ -1,8 +1,10 @@
 import sys
 import os
+import json
 import asyncio
 import typer
 from pathlib import Path
+from typing import Optional, List
 from rich.console import Console
 from rich.table import Table
 
@@ -51,7 +53,13 @@ def run(
     if local_only:
         config.primary_provider = "local_dgx"
     
+    def _prompt_approval(tool: str, args: dict, reason: str) -> bool:
+        console.print(f"\n[bold yellow]⚠️ Governance Confirmation Required:[/bold yellow] Executing '{tool}' with args {json.dumps(args)}")
+        console.print(f"[dim]Reason: {reason}[/dim]")
+        return typer.confirm("Do you approve executing this action?")
+
     tui = ApexInteractiveTUI(config, workspace=target_workspace)
+    tui.approval_callback = _prompt_approval
     asyncio.run(tui.run_goal(goal, is_interactive=interactive))
 
 @app.command()
@@ -104,6 +112,77 @@ def intent(
                 console.print(f"[bold green]✓ Intent Complete:[/bold green]\n{event.get('content')}")
 
     asyncio.run(_run_intent())
+
+@app.command()
+def research(
+    topic: str = typer.Argument(..., help="Topic for multi-query autonomous web search synthesis."),
+    workspace: Path = typer.Option(Path.cwd(), "--workspace", "-w", help="Target workspace directory.")
+):
+    """Run autonomous multi-query web search synthesis."""
+    target_workspace = validate_workspace_path(workspace)
+    from apex.tools.research_synthesis import ResearchSynthesisTool
+    tool = ResearchSynthesisTool()
+    console.print(f"[bold cyan]🔍 APEX Research Synthesizer running: '{topic}'...[/bold cyan]")
+    
+    async def _run_res():
+        report = await tool.search_and_synthesize(topic)
+        console.print(report)
+
+    asyncio.run(_run_res())
+
+@app.command()
+def analyze(
+    csv_or_json_path: str = typer.Argument(..., help="Path to CSV or JSON dataset for summary statistics."),
+    workspace: Path = typer.Option(Path.cwd(), "--workspace", "-w", help="Target workspace directory.")
+):
+    """Compute summary statistics for a dataset."""
+    target_workspace = validate_workspace_path(workspace)
+    from apex.tools.data_analysis import DataAnalysisTool
+    tool = DataAnalysisTool(workspace=target_workspace)
+    console.print(f"[bold green]📊 APEX Data Analyzer inspecting: '{csv_or_json_path}'...[/bold green]")
+    res = tool.analyze_dataset(csv_or_json_path)
+    console.print(res)
+
+@app.command()
+def sysadmin():
+    """Display system hardware telemetry and top active processes."""
+    from apex.tools.sysadmin import SysAdminTool
+    tool = SysAdminTool()
+    metrics = tool.get_system_metrics()
+    processes = tool.list_running_processes(top_n=8)
+    
+    console.print("[bold cyan]💻 APEX SysAdmin Telemetry[/bold cyan]")
+    console.print(f"CPU Utilization: [green]{metrics.get('cpu_utilization_pct')}%[/green]")
+    console.print(f"Memory Usage: [green]{metrics.get('memory_used_gb')} GB / {metrics.get('memory_total_gb')} GB ({metrics.get('memory_used_pct')}%)[/green]")
+    
+    table = Table(title="Top Running System Processes", border_style="cyan")
+    table.add_column("PID", style="bold yellow")
+    table.add_column("Process Name", style="white")
+    table.add_column("CPU %", style="green")
+    table.add_column("Memory %", style="cyan")
+    
+    for p in processes:
+        table.add_row(str(p.get("pid")), str(p.get("name")), f"{p.get('cpu_percent'):.1f}", f"{p.get('memory_percent'):.1f}")
+    console.print(table)
+
+@app.command()
+def debate(
+    goal: str = typer.Argument(..., help="Overall task goal for red-team cross-examination."),
+    proposal: str = typer.Argument(..., help="Proposed technical solution to cross-examine.")
+):
+    """Run adversarial multi-model red-team audit of a proposed solution."""
+    from apex.core.adversarial_debate import AdversarialDebateEngine
+    config = Config.load()
+    engine = AdversarialDebateEngine(config)
+    console.print(f"[bold magenta]⚔️ APEX Adversarial Debate Engine auditing proposal...[/bold magenta]")
+    
+    async def _run_deb():
+        result = await engine.conduct_debate(goal, proposal)
+        console.print(f"[bold yellow]Audit Status:[/bold yellow] {result.get('consensus')}")
+        console.print(f"[bold red]Identified Flaws:[/bold red]\n" + "\n".join(result.get("flaws", [])))
+        console.print(f"[bold green]Refined Solution:[/bold green]\n{result.get('refined_solution')}")
+
+    asyncio.run(_run_deb())
 
 @app.command()
 def digest(
@@ -234,6 +313,23 @@ def memory(
     console.print(table)
 
 @app.command()
+def skills(
+    workspace: Path = typer.Option(Path.cwd(), "--workspace", "-w", help="Target workspace directory.")
+):
+    """List synthesized procedural skills stored in .apex/skills/."""
+    target_workspace = validate_workspace_path(workspace)
+    mem = MemoryManager(workspace=target_workspace)
+    skills_list = mem.procedural.list_skills()
+    
+    table = Table(title="🛠️ APEX Synthesized Procedural Skills", border_style="green")
+    table.add_column("Skill Name", style="bold yellow")
+    table.add_column("Path", style="cyan")
+    
+    for s in skills_list:
+        table.add_row(s.get("name"), s.get("path"))
+    console.print(table)
+
+@app.command()
 def dgx():
     """Inspect local NVIDIA DGX hardware specs and local model endpoints."""
     specs = detect_hardware()
@@ -249,6 +345,33 @@ def dgx():
     console.print(f"CPU Cores: {specs.cpu_cores} | RAM: {specs.total_ram_gb} GB")
     console.print(f"Local Endpoint: [bold blue]{config.local_dgx_endpoint}[/bold blue]")
     console.print(f"Local Model Target: [bold magenta]{config.local_model}[/bold magenta]")
+
+@app.command()
+def mesh():
+    """Start ambient 24/7 background mesh service for continuous monitoring."""
+    from apex.core.cognitive_mesh import CognitiveMeshSubstrate
+    config = Config.load()
+    mesh_service = CognitiveMeshSubstrate(config)
+    console.print("[bold magenta]🌐 APEX Cognitive Mesh Substrate starting...[/bold magenta]")
+    
+    async def _run_mesh():
+        await mesh_service.start_mesh_cycle()
+
+    asyncio.run(_run_mesh())
+
+@app.command()
+def daemon():
+    """Run autonomous watchdog daemon."""
+    from apex.core.daemon import ApexAutonomousDaemon
+    config = Config.load()
+    daemon_svc = ApexAutonomousDaemon(config)
+    console.print("[bold yellow]🐕 APEX Autonomous Watchdog Daemon starting...[/bold yellow]")
+    
+    async def _run_daemon():
+        res = await daemon_svc.run_watchdog_cycle()
+        console.print(f"Daemon Watchdog Cycle Result: {res}")
+
+    asyncio.run(_run_daemon())
 
 def main():
     app()
