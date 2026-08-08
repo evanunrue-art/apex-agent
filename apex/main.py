@@ -153,7 +153,7 @@ def sysadmin():
     
     console.print("[bold cyan]💻 APEX SysAdmin Telemetry[/bold cyan]")
     console.print(f"CPU Utilization: [green]{metrics.get('cpu_utilization_pct')}%[/green]")
-    console.print(f"Memory Usage: [green]{metrics.get('memory_used_gb')} GB / {metrics.get('memory_total_gb')} GB ({metrics.get('memory_used_pct')}%)[/green]")
+    console.print(f"Memory Usage: [green]{metrics.get('memory_used_gb')} GB / {metrics.get('memory_total_gb')} GB ({metrics.get('memory_percent')}%)[/green]")
     
     table = Table(title="Top Running System Processes", border_style="cyan")
     table.add_column("PID", style="bold yellow")
@@ -177,7 +177,7 @@ def debate(
     console.print(f"[bold magenta]⚔️ APEX Adversarial Debate Engine auditing proposal...[/bold magenta]")
     
     async def _run_deb():
-        result = await engine.conduct_debate(goal, proposal)
+        result = await engine.debate_and_refine(goal, proposal)
         console.print(f"[bold yellow]Audit Status:[/bold yellow] {result.get('consensus')}")
         console.print(f"[bold red]Identified Flaws:[/bold red]\n" + "\n".join(result.get("flaws", [])))
         console.print(f"[bold green]Refined Solution:[/bold green]\n{result.get('refined_solution')}")
@@ -355,7 +355,7 @@ def mesh():
     console.print("[bold magenta]🌐 APEX Cognitive Mesh Substrate starting...[/bold magenta]")
     
     async def _run_mesh():
-        await mesh_service.start_mesh_cycle()
+        await mesh_service.start_mesh()
 
     asyncio.run(_run_mesh())
 
@@ -368,7 +368,7 @@ def daemon():
     console.print("[bold yellow]🐕 APEX Autonomous Watchdog Daemon starting...[/bold yellow]")
     
     async def _run_daemon():
-        res = await daemon_svc.run_watchdog_cycle()
+        res = await daemon_svc.start()
         console.print(f"Daemon Watchdog Cycle Result: {res}")
 
     asyncio.run(_run_daemon())

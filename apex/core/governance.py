@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Dict, Any, Tuple, Set
+from typing import Dict, Any, Tuple, Set, Optional
 
 class RiskLevel(Enum):
     LOW = "LOW"

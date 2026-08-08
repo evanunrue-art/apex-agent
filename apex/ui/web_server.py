@@ -156,8 +156,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const form = document.getElementById('ask-form');
         const promptInput = document.getElementById('prompt');
 
-        fetch('/api/hardware').then(r => r.json()).then(data => {
-            document.getElementById('telemetry').innerText = `🎮 GPU: ${data.gpu_name} | CPU Cores: ${data.cpu_cores}`;
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token') || '';
+        const headers = {'Content-Type': 'application/json'};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        fetch('/api/hardware', { headers }).then(r => r.json()).then(data => {
+            if (data.error) {
+                document.getElementById('telemetry').innerText = `Error: ${data.error}`;
+            } else {
+                document.getElementById('telemetry').innerText = `🎮 GPU: ${data.gpu_name} | CPU Cores: ${data.cpu_cores}`;
+            }
         });
 
         form.addEventListener('submit', async (e) => {
@@ -181,7 +190,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             try {
                 const res = await fetch('/api/ask', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: headers,
                     body: JSON.stringify({prompt: text})
                 });
                 const data = await res.json();

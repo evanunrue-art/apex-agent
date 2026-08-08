@@ -29,6 +29,8 @@ from apex.tools.document_ingestion import DocumentIngestionTool
 from apex.tools.security import resolve_and_verify_workspace_path
 from apex.core.orchestrator import AgentOrchestrator
 from apex.ui.web_server import verify_token, start_web_server
+from typer.testing import CliRunner
+from apex.main import app
 
 class TestApexSystem(unittest.TestCase):
 
@@ -230,6 +232,24 @@ class TestApexSystem(unittest.TestCase):
         self.assertFalse(verify_token(mock_req_bad))
         
         ws.GLOBAL_AUTH_TOKEN = None
+
+    def test_cli_smoke_tests(self):
+        runner = CliRunner()
+        
+        # Test help command
+        result = runner.invoke(app, ["--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("APEX CLI", result.stdout)
+        
+        # Test policy command
+        result = runner.invoke(app, ["policy"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Risk Classification", result.stdout)
+        
+        # Test dgx command
+        result = runner.invoke(app, ["dgx"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Hardware & Local Engine Diagnostic", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()

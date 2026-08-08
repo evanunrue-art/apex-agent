@@ -17,6 +17,7 @@ class ApexInteractiveTUI:
         self.config = config
         self.orchestrator = AgentOrchestrator(config, workspace=workspace)
         self.hardware = detect_hardware()
+        self.approval_callback = None
 
     async def run_goal(self, goal: str, is_interactive: bool = True):
         layout = Layout()
@@ -38,7 +39,11 @@ class ApexInteractiveTUI:
         layout["observation"].update(render_observation_panel("Awaiting agent actions..."))
 
         with Live(layout, refresh_per_second=4, console=console):
-            async for event in self.orchestrator.run(goal, is_interactive=is_interactive):
+            async for event in self.orchestrator.run(
+                goal, 
+                is_interactive=is_interactive, 
+                approval_callback=self.approval_callback
+            ):
                 event_type = event.get("type")
                 if event_type == "thought":
                     layout["thought"].update(render_thought_panel(event.get("text", "")))
