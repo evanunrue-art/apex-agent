@@ -29,7 +29,7 @@ class LocalDGXProvider:
     async def get_available_models(self) -> List[str]:
         """Queries /v1/models or /api/tags to list available local model IDs."""
         models = []
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=3.0, trust_env=False) as client:
             # 1. Try vLLM / NIM / OpenAI endpoint
             try:
                 res = await client.get(f"{self.v1_url}/models")
@@ -97,7 +97,7 @@ class LocalDGXProvider:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        async with httpx.AsyncClient(timeout=90.0) as client:
+        async with httpx.AsyncClient(timeout=90.0, trust_env=False) as client:
             # 1. Try OpenAI / vLLM / NIM chat completions endpoint first for all local DGX / vLLM / NIM endpoints
             try:
                 res = await client.post(

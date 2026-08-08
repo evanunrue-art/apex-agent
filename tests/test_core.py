@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from apex.config import Config, detect_hardware, validate_workspace_path
 from apex.providers.router import HybridRouter
@@ -77,21 +77,45 @@ class TestApexSystem(unittest.TestCase):
         asyncio.run(run_val())
 
     def test_local_dgx_provider_generation_mock(self):
-        provider = LocalDGXProvider("http://localhost:11434", default_model="qwen2.5-coder:latest")
-        
-        async def mock_gen():
-            provider.validate_or_select_model = lambda m=None: asyncio.sleep(0.001, result="qwen2.5-coder:latest")
-            with patch("httpx.AsyncClient.post") as mock_post:
-                mock_resp = MagicMock()
-                mock_resp.status_code = 200
-                mock_resp.json.return_value = {
-                    "choices": [{"message": {"content": "Hello from mock vLLM"}}]
-                }
-                mock_post.return_value = mock_resp
-                res = await provider.generate("Test prompt")
-                self.assertEqual(res, "Hello from mock vLLM")
+        provider = LocalDGXProvider(
+            "http://localhost:8000",
+            default_model="spark-model",
+        )
 
-        asyncio.run(mock_gen())
+        async def run_test():
+            provider.validate_or_select_model = AsyncMock(
+                return_value="spark-model"
+            )
+
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {
+                "choices": [
+                    {"message": {"content": "Hello from mock vLLM"}}
+                ]
+            }
+
+            client = AsyncMock()
+            client.post.return_value = response
+
+            context_manager = MagicMock()
+            context_manager.__aenter__ = AsyncMock(return_value=client)
+            context_manager.__aexit__ = AsyncMock(return_value=None)
+
+            with patch(
+                "apex.providers.local_dgx.httpx.AsyncClient",
+                return_value=context_manager,
+            ) as constructor:
+                result = await provider.generate("Test prompt")
+
+            self.assertEqual(result, "Hello from mock vLLM")
+            constructor.assert_called_once_with(
+                timeout=90.0,
+                trust_env=False,
+            )
+            client.post.assert_awaited_once()
+
+        asyncio.run(run_test())
 
     def test_path_containment_and_traversal_rejection(self):
         fs = FileSystemTool(workspace=self.test_dir)
@@ -250,6 +274,22 @@ class TestApexSystem(unittest.TestCase):
         result = runner.invoke(app, ["dgx"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Hardware & Local Engine Diagnostic", result.stdout)
+
+    def test_cli_debate_smoke(self):
+        runner = CliRunner()
+
+        with patch(
+            "apex.core.adversarial_debate.AdversarialDebateEngine.debate_and_refine",
+            new=AsyncMock(return_value=("Hardened solution", 0.95)),
+        ):
+            result = runner.invoke(
+                app,
+                ["debate", "Test goal", "Initial proposal"],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Audit Confidence: 0.95", result.stdout)
+        self.assertIn("Hardened solution", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()
